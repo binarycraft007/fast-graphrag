@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
+from itertools import islice
 
 from fast_graphrag._llm import BaseLLMService
 from fast_graphrag._storage._base import (
@@ -118,7 +119,23 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
         # STEP (2): Computing entity embeddings
         progress_bar.set_description("Building... [computing embeddings]")
         # Insert entities in entity_storage
-        embeddings = await self.embedding_service.get_embedding(texts=[d.to_str() for _, d in upserted_nodes])
+        def chunk_iterable(iterable, size):
+            """Yield successive chunks of specified size from the iterable."""
+            it = iter(iterable)
+            while chunk := list(islice(it, size)):
+                yield chunk
+
+        texts = [d.to_str() for _, d in upserted_nodes]
+
+        # Chunk texts into groups of 100
+        text_chunks = list(chunk_iterable(texts, 100))
+
+        embeddings = []
+        for chunk in text_chunks:
+            # Get embeddings for each chunk
+            chunk_embeddings = await self.embedding_service.get_embedding(texts=chunk)
+            embeddings.extend(chunk_embeddings)
+        #embeddings = await self.embedding_service.get_embedding(texts=[d.to_str() for _, d in upserted_nodes])
         progress_bar.update(1)
         await self.entity_storage.upsert(ids=(i for i, _ in upserted_nodes), embeddings=embeddings)
         progress_bar.update(1)
