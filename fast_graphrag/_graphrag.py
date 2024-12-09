@@ -1,7 +1,7 @@
 """This module implements a Graph-based Retrieval-Augmented Generation (GraphRAG) system."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generic, List, Optional, Tuple, Union
+from typing import Any, Dict, Generic, List, Optional, Tuple, Union, Type
 
 from fast_graphrag._llm import BaseLLMService, format_and_send_prompt
 from fast_graphrag._llm._base import BaseEmbeddingService
@@ -14,6 +14,7 @@ from fast_graphrag._services._state_manager import BaseStateManagerService
 from fast_graphrag._storage._base import BaseGraphStorage, BaseIndexedKeyValueStorage, BaseVectorStorage
 from fast_graphrag._types import GTChunk, GTEdge, GTEmbedding, GTHash, GTId, GTNode, TContext, TDocument, TQueryResponse
 from fast_graphrag._utils import TOKEN_TO_CHAR_RATIO, get_event_loop, logger
+from fast_graphrag._llm._base import T_model
 
 
 @dataclass
@@ -28,6 +29,7 @@ class QueryParam:
     entities_max_tokens: int = 4000
     relationships_max_tokens: int = 3000
     chunks_max_tokens: int = 9000
+    response_model: Type[T_model] = TAnswer
 
 
 @dataclass
@@ -202,9 +204,13 @@ class BaseGraphRAG(Generic[GTEmbedding, GTHash, GTChunk, GTNode, GTEdge, GTId]):
                         }
                     ),
                 },
-                response_model=TAnswer,
+                response_model=params.response_model,
             )
-            answer = llm_response.answer
+
+            if hasattr(params.response_model, "answer"):
+                answer = llm_response.answer
+            else:
+                answer = llm_response.model_dump_json()
 
         return TQueryResponse[GTNode, GTEdge, GTHash, GTChunk](response=answer, context=relevant_state)
 
